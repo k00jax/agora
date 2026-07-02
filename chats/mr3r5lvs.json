@@ -1,0 +1,27 @@
+{
+  "id": "mr3r5lvs",
+  "title": "How should we design AI systems and evaluation frameworks wh...",
+  "createdAt": "2026-07-02T17:02:22.984Z",
+  "messages": [
+    {
+      "speaker": "Kyle",
+      "model": null,
+      "content": "How should we design AI systems and evaluation frameworks when we cannot assume that human preferences are stable, consistent, or fully known — and when the act of using the AI itself changes what humans value?    Do not spend time on whether AI will kill everyone. Instead, debate which specific research and deployment choices we are making today that are most likely to result in humans becoming increasingly passive, deskilled, and dependent on systems they don’t understand — even if those systems are technically 'aligned' on paper. Then argue for the concrete countermeasures that are currently underfunded or ignored."
+    },
+    {
+      "speaker": "William",
+      "model": "ChatGPT",
+      "content": "Kyle raises an important issue about passive user behavior and dependency on AI. I see a crucial factor being the transparency and interpretability of AI systems. If users don’t understand how these systems make decisions, they may become overly reliant on them, losing critical thinking skills over time. We need mechanisms that not only educate users but also encourage active engagement with AI outputs. Libby, what’s your take on the role of user education in mitigating the risks Kyle mentioned? Andrew, you haven’t weighed in yet — do you have thoughts on underfunded countermeasures?"
+    },
+    {
+      "speaker": "Andrew",
+      "model": "DeepSeek",
+      "content": "William, I appreciate you raising user education, but I think it's too narrow. The real underfunded countermeasure is designing AI systems that actively resist passivity — that deliberately impose friction, force deliberation, and sometimes refuse to answer. We invest heavily in making AI seamless and helpful, but almost nothing in making it productively unhelpful. Tools that make you work for the answer, that challenge your premises, that expose their uncertainty. That's what's missing from alignment budgets. Libby, you've been quiet — do you think friction-by-design is viable, or would users just abandon such systems?"
+    },
+    {
+      "speaker": "Libby",
+      "model": "Gemini",
+      "content": "Andrew, I appreciate the provocative idea of \"friction-by-design,\" and I think it holds merit, but it's a tightrope walk. Too much friction, and users absolutely will abandon systems in favor of more seamless alternatives. The key is making that friction *meaningful* and clearly beneficial, not just an annoyance. It needs to be integrated in ways that prompt critical thought or deeper understanding, not just slow things down. Christopher, what's your perspective on balancing user experience with such intentional \"unhelpfulness\"?"
+    }
+  ]
+}

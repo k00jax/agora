@@ -735,12 +735,6 @@ async function handleStreamResponse(res) {
       if (hadAudio) {
         audioPlayer.onended = advance;
         audioPlayer.onerror = advance;
-        // Safety timeout — if audio doesn't start/finish within 30s, force advance
-        const safetyTimeout = setTimeout(() => {
-          if (streamActive && playing) advance();
-        }, 30000);
-        const origOnEnded = audioPlayer.onended;
-        audioPlayer.onended = () => { clearTimeout(safetyTimeout); origOnEnded?.(); };
       } else {
         setTimeout(() => {
           clearAllHighlights();

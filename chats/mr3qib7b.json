@@ -1,0 +1,17 @@
+{
+  "id": "mr3qib7b",
+  "title": "What are the highest-leverage technical and institutional me...",
+  "createdAt": "2026-07-02T16:44:16.055Z",
+  "messages": [
+    {
+      "speaker": "Kyle",
+      "model": null,
+      "content": "What are the highest-leverage technical and institutional mechanisms we should be building right now to ensure that increasingly powerful AI systems expand individual human agency and decision-making capacity, rather than primarily optimizing for outcomes that powerful organizations can measure and control?"
+    },
+    {
+      "speaker": "William",
+      "model": "ChatGPT",
+      "content": "Kyle, that's a crucial question. I think one possible mechanism is to prioritize transparency and accountability in AI systems, ensuring that individuals understand how decisions are made and what data is used. This could empower users by giving them the ability to challenge or engage with the system. \n\nHowever, we also need to consider the balance between individual agency and the potential for misinformation or manipulation. Andrew, I’d be interested to hear your thoughts on how we can create safeguards that allow for agency while minimizing those risks."
+    }
+  ]
+}
