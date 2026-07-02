@@ -692,6 +692,22 @@ async function handleStreamResponse(res) {
   let metaData = null;
   streamActive = true;
 
+  // Safety timeout: if a speaker shows "speaking" for 18s with no tokens, force advance
+  let lastTokenTime = Date.now();
+  let hasTokens = false;
+  const safetyInterval = setInterval(() => {
+    if (streamActive && hasTokens && Date.now() - lastTokenTime > 18000) {
+      // Stream stalled — force-advance
+      clearInterval(safetyInterval);
+      if (currentReader) { try { currentReader.cancel(); } catch(e) {} currentReader = null; }
+      clearAllHighlights();
+      streamActive = false;
+      statusEl.textContent = 'Speaker stalled — picking someone else...';
+      updateButtons();
+      scheduleNextTurn();
+    }
+  }, 5000);
+
   await consumeSSE(res,
     (meta) => {
       metaData = meta;
@@ -700,13 +716,17 @@ async function handleStreamResponse(res) {
       if (bubble) { bubble.textContent = ''; bubble.classList.add('visible'); }
       statusEl.textContent = `${meta.speaker} is speaking...`;
       updateButtons();
+      lastTokenTime = Date.now();
     },
     (token) => {
       fullText += token;
+      hasTokens = true;
+      lastTokenTime = Date.now();
       const bubble = agentBubble(speakingId);
       if (bubble) bubble.textContent = stripMarkdown(fullText);
     },
     (done) => {
+      clearInterval(safetyInterval);
       if (metaData) {
         addMessage(done.speaker, metaData.modelName, fullText, metaData.color);
       }
@@ -750,6 +770,7 @@ async function handleStreamResponse(res) {
       }
     },
     (hung) => {
+      clearInterval(safetyInterval);
       clearAllHighlights();
       streamActive = false;
       statusEl.textContent = `Speaker timed out — picking someone else...`;
@@ -757,6 +778,7 @@ async function handleStreamResponse(res) {
       scheduleNextTurn();
     },
     (msg) => {
+      clearInterval(safetyInterval);
       statusEl.textContent = msg;
       clearAllHighlights();
       streamActive = false;

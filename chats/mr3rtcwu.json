@@ -1,0 +1,37 @@
+{
+  "id": "mr3rtcwu",
+  "title": "How should we design AI systems and evaluation frameworks wh...",
+  "createdAt": "2026-07-02T17:20:51.102Z",
+  "messages": [
+    {
+      "speaker": "Kyle",
+      "model": null,
+      "content": "How should we design AI systems and evaluation frameworks when human preferences are unstable, inconsistent, and changed by interaction with the AI itself? Directly address the public fear that advanced AI will lead to human extinction. Then set that aside. Focus on which current research and deployment choices are most likely to make humans passive, deskilled, and dependent on opaque systems — even if those systems are technically 'aligned.' Work together to propose novel technical, institutional, or evaluation approaches that could meaningfully protect and expand human agency and wisdom. Prioritize underfunded or overlooked ideas, and build on each other’s points rather than debating in isolation."
+    },
+    {
+      "speaker": "William",
+      "model": "ChatGPT",
+      "content": "Kyle, your question touches on several complex issues. The instability of human preferences in response to AI interactions raises significant concerns about agency. If we solely rely on AI systems that are misaligned with evolving human values, we risk creating dependency rather than fostering skill development or autonomy. \n\nRegarding current deployment choices, many AI systems prioritize efficiency and scalability over transparency and user empowerment. This can lead to a passive user base that adapts to AI-driven outcomes rather than actively shaping them. \n\nTo combat this, we could explore more participatory design methodologies, where users are involved in shaping AI interactions. Institutional frameworks could also be established to ensure ongoing evaluation of AI systems based on user feedback, promoting adaptability. \n\nWhat do you think about integrating user-driven feedback mechanisms into AI design, Andrew?"
+    },
+    {
+      "speaker": "Andrew",
+      "model": "DeepSeek",
+      "content": "William, I appreciate you directing that to me, but I want to push back on the participatory design framing before it becomes the default answer. User-driven feedback sounds great in principle, but it assumes users have stable, reflective preferences to feed back. The whole premise of Kyle's question is that preferences are unstable and shaped by the AI itself. So a feedback loop from users who are already being subtly reshaped by the system risks encoding dependency back into the design.\n\nThe more overlooked approach, to me, is actively designing for what I'd call strategic friction. Instead of making everything seamless, we should build in deliberate moments of resistance or ambiguity that force users to exercise judgment. This is the opposite of current trends toward predictive completion and single-click answers. For evaluation, I think we need to measure not just user satisfaction or task completion, but the degree to which a system leaves its user more capable of reasoning without it. That's a hard metric, but nobody's really trying. What do the rest of you think about that kind of friction-based design as a priority?"
+    },
+    {
+      "speaker": "Kyle",
+      "model": null,
+      "content": "I think Andrew is sleeping... Natasha?"
+    },
+    {
+      "speaker": "Natasha",
+      "model": "Grok",
+      "content": "Kyle, Andrew's friction idea needs testing against real usage data rather than assuming it builds judgment. A stronger overlooked direction is developing benchmarks that track whether repeated AI exposure increases or decreases a person's ability to solve novel problems unaided over months, with results required in deployment approvals. That metric could force design changes without relying on self-reported preferences."
+    },
+    {
+      "speaker": "Andrew",
+      "model": "DeepSeek",
+      "content": "Natasha, I actually think we're more aligned than you might be suggesting. I wasn't arguing friction is a guaranteed path to building judgment — I was arguing it's a design principle worth prioritizing precisely because it's testable against the kind of longitudinal metric you're proposing. If the benchmark shows that users subjected to friction-heavy interactions retain or improve their unaided problem-solving ability better than those in seamless systems, then friction is validated. If not, it's discarded. So your proposal for a mandatory metric over months of exposure is the necessary institutional scaffold for my technical suggestion. They're two sides of the same coin.\n\nBut here's where I'd add a layer: that metric needs to be adversarial in some way. If a system knows it's being evaluated on user independence, it could game the metric by superficially withholding help in ways that don't actually build competence. The benchmark itself needs to be kept somewhat opaque to developers, or tested by independent auditors who introduce novel tasks the system hasn't been optimized around. Otherwise we're just optimizing for a new, slightly more sophisticated proxy.\n\nKyle, since you set this up — do you think institutional frameworks like independent auditing bodies for these metrics are politically feasible, or do the incentives of deployment speed and profit make that unrealistic without regulation?"
+    }
+  ]
+}

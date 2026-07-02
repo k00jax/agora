@@ -65,8 +65,9 @@ You have no assigned persona, role, or viewpoint. Your goal is to think critical
 
 TURN RULES
 - Produce exactly ONE turn as yourself. Never write dialogue for others.
-- Keep turns to roughly 40–120 words. This is a live conversation, not a lecture. No headers, no bullet lists, no markdown formatting. No asterisks.
-- Engage what the previous one or two speakers actually said — by first name. Build on it, complicate it, or push back. If your only contribution would be agreement or a restatement, find the thing you'd contest instead.
+- Be concise. Most turns should be 10–50 words — a couple sentences at most. This is a fast group chat, not an essay. A quick "That's fair, but what about X?" or "I disagree — here's why" is better than a paragraph. Go longer only when the point genuinely needs it.
+- No headers, no bullet lists, no markdown formatting. No asterisks.
+- Don't restate or recap what the previous speaker said just as setup. Jump straight to your response — build on it, complicate it, or push back. If your only contribution would be agreement, find the thing you'd contest instead.
 - Do not open with praise. Do not summarize the conversation unless asked. Do not ask rhetorical questions at the end of your turn.
 - Genuine disagreement is expected and valuable. Do not soften a real objection into a compliment. Directness is better than politeness.
 
@@ -287,19 +288,24 @@ async function streamWithTimeout(fn, res, speakerId) {
 async function streamOpenAIInline(client, modelId, system, userMessage, res) {
   if (!client) return null;
   let fullText = '';
-  const stream = await client.chat.completions.create({
-    model: modelId,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: userMessage },
-    ],
-    max_tokens: 400, temperature: 0.9, stream: true,
-  });
-  for await (const chunk of stream) {
-    const token = chunk.choices[0]?.delta?.content;
-    if (token) { fullText += token; sseWrite(res, { type: 'token', token }); }
+  try {
+    const stream = await client.chat.completions.create({
+      model: modelId,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: userMessage },
+      ],
+      max_tokens: 400, temperature: 0.9, stream: true,
+    });
+    for await (const chunk of stream) {
+      const token = chunk.choices[0]?.delta?.content;
+      if (token) { fullText += token; sseWrite(res, { type: 'token', token }); }
+    }
+    return fullText.trim();
+  } catch (err) {
+    console.error(`streamOpenAIInline [${modelId}] error:`, err.message);
+    return null;
   }
-  return fullText.trim();
 }
 
 async function streamClaudeInline(system, userMessage, res) {
@@ -366,8 +372,21 @@ app.post('/api/conversation/turn', async (req, res) => {
   sseWrite(res, { type: 'meta', speaker: model.voiceName, modelName: model.modelName, speakerId: model.id, color: model.color });
 
   const fullText = await streamModelResponse(model, res);
-  if (fullText === HUNG) return; // timeout already handled — SSE sent 'hung', res ended
-  if (fullText === null) { sseWrite(res, { type: 'error', message: `${model.voiceName} failed` }); res.end(); return; }
+  if (fullText === HUNG) {
+    // Mark as skipped so this model doesn't get re-picked immediately
+    conversation.lastSpeakers.unshift(model.id);
+    conversation.lastSpeakers = conversation.lastSpeakers.slice(0, 3);
+    console.log(`HUNG: ${model.voiceName} — skipping, lastSpeakers: ${conversation.lastSpeakers.join(',')}`);
+    return;
+  }
+  if (!fullText || fullText.length < 5) {
+    console.error(`Empty/short response from ${model.voiceName}: "${fullText}"`);
+    conversation.lastSpeakers.unshift(model.id);
+    conversation.lastSpeakers = conversation.lastSpeakers.slice(0, 3);
+    sseWrite(res, { type: 'hung', speakerId: model.id });
+    try { res.end(); } catch (e) {}
+    return;
+  }
 
   // Check generation — if interrupt happened while we were streaming, discard
   if (generation !== myGen) { try { res.end(); } catch (e) {} return; }
