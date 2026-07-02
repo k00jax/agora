@@ -7,6 +7,7 @@ import type { UserModel } from '@/lib/models';
 import AvatarPanel from '@/components/chat/AvatarPanel';
 import MessageList from '@/components/chat/MessageList';
 import ChatSidebar from '@/components/chat/ChatSidebar';
+import NavHeader from '@/components/chat/NavHeader';
 
 interface Message {
   speaker: string;
@@ -386,6 +387,7 @@ export default function ChatPage() {
 
       {/* Main Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <NavHeader sidebarOpen={sidebarOpen} />
         {/* Avatar Panel */}
         <AvatarPanel
           models={models}
