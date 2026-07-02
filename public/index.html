@@ -128,7 +128,9 @@
     transition: transform 0.2s, filter 0.2s;
   }
   .agent-card.active { transform: scale(1.08); filter: brightness(1.3); }
-  .agent-card.inactive { filter: brightness(0.5) saturate(0.4); }
+  .agent-card.inactive { filter: brightness(0.45) saturate(0.35); }
+  .agent-card.was-last { filter: brightness(0.85) saturate(0.7); }
+  .agent-card.was-second { filter: brightness(0.7) saturate(0.55); }
   .agent-card .bubble {
     position: absolute;
     bottom: calc(100% + 12px);
@@ -463,6 +465,7 @@
 // ── State ─────────────────────────────────────────────────────────
 let models = [];
 let speakingId = null;
+let prevSpeakerIds = []; // track last 2 speakers for dim highlighting
 let conversationActive = false;
 let isRecording = false;
 let playing = false;
@@ -518,15 +521,32 @@ function agentCardId(id) { return document.getElementById('card-' + id); }
 function agentBubble(id) { return document.getElementById('bubble-' + id); }
 
 function highlightSpeaker(modelId) {
-  document.querySelectorAll('.agent-card').forEach(c => { c.classList.remove('active'); c.classList.add('inactive'); });
+  document.querySelectorAll('.agent-card').forEach(c => {
+    c.classList.remove('active', 'inactive', 'was-last', 'was-second');
+    c.classList.add('inactive');
+  });
   const card = agentCardId(modelId);
-  if (card) { card.classList.remove('inactive'); card.classList.add('active'); }
+  if (card) { card.classList.remove('inactive', 'was-last', 'was-second'); card.classList.add('active'); }
+
+  // Apply dim highlights to previous speakers
+  if (prevSpeakerIds[0] && prevSpeakerIds[0] !== modelId) {
+    const prev = agentCardId(prevSpeakerIds[0]);
+    if (prev) { prev.classList.remove('inactive'); prev.classList.add('was-last'); }
+  }
+  if (prevSpeakerIds[1] && prevSpeakerIds[1] !== modelId && prevSpeakerIds[1] !== prevSpeakerIds[0]) {
+    const prev2 = agentCardId(prevSpeakerIds[1]);
+    if (prev2) { prev2.classList.remove('inactive'); prev2.classList.add('was-second'); }
+  }
+
   speakingId = modelId;
 }
 
 function clearAllHighlights() {
-  document.querySelectorAll('.agent-card').forEach(c => { c.classList.remove('active', 'inactive'); });
+  document.querySelectorAll('.agent-card').forEach(c => {
+    c.classList.remove('active', 'inactive', 'was-last', 'was-second');
+  });
   speakingId = null;
+  prevSpeakerIds = [];
   document.querySelectorAll('.bubble').forEach(b => b.classList.remove('visible'));
 }
 
@@ -729,6 +749,8 @@ async function handleStreamResponse(res) {
       clearInterval(safetyInterval);
       if (metaData) {
         addMessage(done.speaker, metaData.modelName, fullText, metaData.color);
+        prevSpeakerIds.unshift(metaData.speakerId);
+        prevSpeakerIds = prevSpeakerIds.slice(0, 2);
       }
       const bubble = agentBubble(done.speakerId);
       if (bubble) bubble.classList.remove('visible');

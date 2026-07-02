@@ -110,22 +110,31 @@ function formatHistory(messages) {
 
 // ── Speaker selection (weighted random, name-aware, anti-ping-pong) ──
 function pickNextSpeaker(triggerMessage) {
-  // If a model is addressed by name, that model responds (if not last speaker)
+  // Check for named references — prioritize the LAST name mentioned
   if (triggerMessage) {
     const msg = triggerMessage.toLowerCase();
+    // Find all name matches with their positions
+    const matches = [];
     for (const model of MODELS) {
-      if (msg.includes(model.voiceName.toLowerCase()) || msg.includes(model.modelName.toLowerCase())) {
-        if (model.id !== conversation.lastSpeakers[0]) {
-          return model;
-        }
-        // named but was last speaker — continue searching for other named models
+      const voiceIdx = msg.lastIndexOf(model.voiceName.toLowerCase());
+      const modelIdx = msg.lastIndexOf(model.modelName.toLowerCase());
+      const idx = Math.max(voiceIdx, modelIdx);
+      if (idx >= 0) matches.push({ model, idx });
+    }
+    // Sort by position descending — last-mentioned first priority
+    matches.sort((a, b) => b.idx - a.idx);
+    for (const { model } of matches) {
+      if (model.id !== conversation.lastSpeakers[0]) {
+        return model;
       }
     }
+    // All named models were last speaker — use first named
+    if (matches.length > 0) return matches[0].model;
   }
 
   const available = MODELS.map(m => m.id);
 
-  // Count turns since each model last spoke (using voiceName in messages)
+  // Count turns since each model last spoke
   const turnsSince = {};
   for (const mid of available) turnsSince[mid] = Infinity;
   for (let i = conversation.messages.length - 1, count = 0; i >= 0; i--) {
@@ -138,12 +147,9 @@ function pickNextSpeaker(triggerMessage) {
     }
   }
 
-  // Exclude last speaker (never twice in a row)
   const candidates = available.filter(id => id !== conversation.lastSpeakers[0]);
   if (candidates.length === 0) return MODELS[Math.floor(Math.random() * MODELS.length)];
 
-  // Weighted random: models silent longest get higher probability
-  // Square the turnsSince to heavily bias toward the forgotten
   const weights = candidates.map(id => Math.pow(turnsSince[id] || 1, 2));
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   let roll = Math.random() * totalWeight;
@@ -165,6 +171,9 @@ function stripMarkdown(text) {
     .replace(/^\d+\.\s+/gm, '')         // numbered lists
     .replace(/^>\s+/gm, '')             // blockquotes
     .replace(/\n{3,}/g, '\n\n')         // excessive newlines
+    .replace(/\[BREAK_LOOP\]/gi, '')
+    .replace(/\[INVITE_KYLE\]/gi, '')
+    .replace(/\[USER_INTERRUPT\]/gi, '')
     .trim();
 }
 
@@ -228,7 +237,7 @@ function buildUserMessage(model) {
         pairCount++;
       }
     }
-    if (pairCount >= 2) {
+    if (pairCount >= 1) {
       extra = extra + '[BREAK_LOOP] ';
     }
   }
