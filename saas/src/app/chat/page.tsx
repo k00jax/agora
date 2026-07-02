@@ -31,7 +31,7 @@ export default function ChatPage() {
   const [indefiniteMode, setIndefiniteMode] = useState(false);
   const [recording, setRecording] = useState(false);
   const [statusText, setStatusText] = useState('Say something to start the roundtable');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 : false);
 
   const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);

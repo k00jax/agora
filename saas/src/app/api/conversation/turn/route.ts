@@ -7,6 +7,7 @@ import { ALL_MODELS, type ModelDef } from '@/lib/models';
 import { resolveApiKey } from '@/lib/keys';
 import { streamModelResponse } from '@/lib/streamers';
 import { sseWrite } from '@/lib/sse';
+import { conversationRateLimit } from '@/lib/rate-limit';
 import { estimateTurnCredits, getBalance, deductCredits, ensureTokenRow } from '@/lib/tokens';
 import { createDb } from '@/lib/db';
 
@@ -65,6 +66,7 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new Response('Unauthorized', { status: 401 });
+  if (!conversationRateLimit(user.id)) return new Response('Rate limit exceeded', { status: 429 });
 
   const body = await req.json().catch(() => ({}));
   const { message, conversationId } = body as { message?: string; conversationId?: string };
