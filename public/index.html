@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Group Chat</title>
+<style>
+  :root {
+    --bg: #0d0d1a;
+    --surface: #151530;
+    --text: #e8e8e8;
+    --muted: #777;
+    --radius: 14px;
+    --sidebar-w: 280px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ──────────────────────────────────────────────── */
+  .sidebar {
+    width: var(--sidebar-w);
+    min-width: var(--sidebar-w);
+    background: #0a0a15;
+    border-right: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    transition: margin-left 0.25s, min-width 0.25s;
+  }
+  .sidebar.collapsed {
+    margin-left: calc(-1 * var(--sidebar-w));
+    min-width: 0;
+  }
+  .sidebar-header {
+    padding: 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .new-chat-btn {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    background: transparent;
+    color: #ccc;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .new-chat-btn:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.3); }
+  .chat-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  .chat-item {
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: #aaa;
+    margin-bottom: 2px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.15s;
+  }
+  .chat-item:hover { background: rgba(255,255,255,0.04); }
+  .chat-item .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chat-item .del-btn {
+    background: none; border: none; color: #555; cursor: pointer;
+    font-size: 1rem; padding: 2px 6px; border-radius: 4px; visibility: hidden;
+  }
+  .chat-item:hover .del-btn { visibility: visible; }
+  .chat-item .del-btn:hover { color: #c0392b; background: rgba(192,57,43,0.15); }
+
+  /* ── Sidebar toggle ───────────────────────────────────────── */
+  .sidebar-toggle {
+    position: fixed;
+    left: calc(var(--sidebar-w) - 12px);
+    top: 12px;
+    z-index: 200;
+    background: #1a1a30;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #888;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: left 0.25s, color 0.15s;
+  }
+  .sidebar-toggle:hover { color: #ccc; }
+  .sidebar.collapsed ~ .sidebar-toggle { left: 8px; }
+
+  /* ── Main area ────────────────────────────────────────────── */
+  .main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Avatar panel ──────────────────────────────────────────── */
+  .avatar-panel {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    padding: 20px 16px 0;
+    flex-shrink: 0;
+  }
+  .agent-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    width: 195px;
+    transition: transform 0.2s, filter 0.2s;
+  }
+  .agent-card.active { transform: scale(1.08); filter: brightness(1.3); }
+  .agent-card.inactive { filter: brightness(0.5) saturate(0.4); }
+  .agent-card .bubble {
+    position: absolute;
+    bottom: calc(100% + 12px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e1e3a;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 1rem;
+    line-height: 1.4;
+    max-width: 260px;
+    min-width: 120px;
+    text-align: center;
+    word-break: break-word;
+    display: none;
+    z-index: 10;
+  }
+  .agent-card .bubble.visible { display: block; }
+  .agent-card .bubble::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #1e1e3a;
+  }
+  .agent-card .avatar-wrapper {
+    position: relative;
+    width: 135px; height: 135px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 4px solid transparent;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    margin-bottom: 10px;
+  }
+  .agent-card.active .avatar-wrapper {
+    border-color: var(--agent-color);
+    box-shadow: 0 0 24px var(--agent-glow);
+  }
+  .agent-card .avatar-wrapper img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  .agent-card .voice-name {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--agent-color, #aaa);
+    text-align: center;
+  }
+  .agent-card .model-label {
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 2px;
+  }
+
+  /* ── Chat log ──────────────────────────────────────────────── */
+  .chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .msg {
+    max-width: 75%;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    line-height: 1.45;
+    animation: msgIn 0.25s ease;
+  }
+  .msg.kyle {
+    align-self: flex-end;
+    background: #253a5e;
+    border-bottom-right-radius: 4px;
+  }
+  .msg.ai {
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+  }
+  .msg .sender {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+  }
+  .msg .sender .model-tag {
+    font-weight: 400;
+    opacity: 0.65;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .msg .body { white-space: pre-wrap; font-size: 0.92rem; }
+  @keyframes msgIn { from { opacity: 0; transform: translateY(6px); } }
+
+  /* ── Invite bar ────────────────────────────────────────────── */
+  .invite-bar {
+    padding: 10px 20px;
+    background: #1a2a1a;
+    border-top: 1px solid rgba(100,200,100,0.2);
+    display: none;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .invite-bar.visible { display: flex; }
+  .invite-bar .invite-label {
+    font-size: 0.85rem;
+    color: #8c8;
+    margin-right: 8px;
+  }
+  .invite-btn {
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .invite-respond {
+    background: #2a5a2a;
+    color: #cfc;
+    border-color: #4a8a4a;
+  }
+  .invite-respond:hover { background: #3a6a3a; }
+  .invite-skip {
+    background: transparent;
+    color: #aaa;
+    border-color: #555;
+  }
+  .invite-skip:hover { background: rgba(255,255,255,0.05); }
+  .invite-indefinite {
+    background: transparent;
+    color: #e88;
+    border-color: #844;
+  }
+  .invite-indefinite:hover { background: rgba(255,100,100,0.08); }
+
+  /* ── Indefinite banner ─────────────────────────────────────── */
+  .indefinite-banner {
+    padding: 6px 20px;
+    background: #3a1010;
+    border-top: 1px solid rgba(255,80,80,0.3);
+    text-align: center;
+    font-size: 0.8rem;
+    color: #e88;
+    display: none;
+    flex-shrink: 0;
+  }
+  .indefinite-banner.visible { display: block; }
+
+  /* ── Controls ──────────────────────────────────────────────── */
+  .controls {
+    padding: 12px 20px 16px;
+    background: var(--surface);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .text-input-row {
+    padding: 8px 20px 0;
+    background: var(--surface);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .text-input-row input {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid #444;
+    background: #1a1a30;
+    color: #e0e0e0;
+    font-size: 0.95rem;
+    outline: none;
+  }
+  .text-input-row input:focus { border-color: #6688cc; }
+  .text-input-row input::placeholder { color: #666; }
+  .record-btn {
+    flex: 1;
+    padding: 16px;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: white;
+    background: #1a3a5c;
+  }
+  .record-btn:hover { background: #22507a; }
+  .record-btn.listening {
+    background: #c0392b;
+    animation: pulse 1.5s infinite;
+  }
+  .record-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(192,57,43,0.5); }
+    50% { box-shadow: 0 0 0 18px rgba(192,57,43,0); }
+  }
+  .side-btn {
+    padding: 14px 18px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text);
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .side-btn:hover { background: rgba(255,255,255,0.06); }
+  .side-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+  #interruptBtn { border-color: #c0392b; color: #e74c3c; }
+  #interruptBtn:hover:not(:disabled) { background: rgba(192,57,43,0.15); }
+
+  .status-bar {
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--muted);
+    padding: 2px 0 0;
+  }
+  .warning-text { color: #e88; font-size: 0.75rem; }
+
+  /* ── Kyle avatar ──────────────────────────────────────────── */
+  .kyle-avatar {
+    position: fixed;
+    bottom: 130px;
+    right: 28px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .kyle-avatar .kyle-wrapper {
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 3px solid #6688cc;
+    box-shadow: 0 0 16px rgba(100,136,204,0.3);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .kyle-avatar .kyle-wrapper:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 24px rgba(100,136,204,0.5);
+  }
+  .kyle-avatar .kyle-wrapper img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  .kyle-avatar .kyle-label {
+    font-size: 0.8rem;
+    color: #6688cc;
+    font-weight: 600;
+    text-align: center;
+  }
+  .kyle-avatar .kyle-sub {
+    font-size: 0.7rem;
+    color: #555;
+    text-align: center;
+  }
+  audio { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <button class="new-chat-btn" id="newChatBtn">+ New Chat</button>
+  </div>
+  <div class="chat-list" id="chatList"></div>
+</div>
+
+<div class="sidebar-toggle" id="sidebarToggle">◀</div>
+
+<!-- Main -->
+<div class="main-area">
+
+<div class="avatar-panel" id="avatarPanel"></div>
+
+<div class="chat-area" id="chatArea"></div>
+
+<div class="status-bar" id="status">Say something to start the roundtable</div>
+
+<div class="indefinite-banner" id="indefiniteBanner">
+  Continue Indefinitely active — models are talking amongst themselves.
+  <span class="warning-text">Each turn consumes tokens across all 5 APIs.</span>
+  Press Interrupt to jump back in.
+</div>
+
+<div class="invite-bar" id="inviteBar">
+  <span class="invite-label">You're being invited into the conversation:</span>
+  <button class="invite-btn invite-respond" id="inviteRespond">Respond</button>
+  <button class="invite-btn invite-skip" id="inviteSkip">Continue</button>
+  <button class="invite-btn invite-indefinite" id="inviteIndefinite">Continue Indefinitely</button>
+</div>
+
+<div class="text-input-row">
+  <input type="text" id="textInput" placeholder="Type your message and press Enter..." autocomplete="off">
+</div>
+<div class="controls">
+  <button class="record-btn" id="recordBtn">Press and Hold to Speak</button>
+  <button class="side-btn" id="interruptBtn" disabled>Interrupt</button>
+  <button class="side-btn" id="stopBtn" disabled>Stop</button>
+</div>
+
+</div><!-- /main-area -->
+
+<audio id="audioPlayer"></audio>
+
+<div class="kyle-avatar" id="kyleAvatar">
+  <div class="kyle-wrapper">
+    <img src="/avatars/kyle.jpg" alt="Kyle">
+  </div>
+  <div class="kyle-label">Kyle</div>
+  <div class="kyle-sub">Human</div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────
+let models = [];
+let speakingId = null;
+let conversationActive = false;
+let isRecording = false;
+let playing = false;
+let currentReader = null;
+let currentAbortController = null;
+let haltedForUser = false;
+let indefiniteMode = false;
+let autoContinueTimer = null;
+let streamActive = false; // guard to prevent overlapping SSE streams
+let currentAudioUrl = null;
+let needsReset = true; // ensures reset on first message after new chat or reload
+
+const recordBtn = document.getElementById('recordBtn');
+const textInput = document.getElementById('textInput');
+const interruptBtn = document.getElementById('interruptBtn');
+const stopBtn = document.getElementById('stopBtn');
+const chatArea = document.getElementById('chatArea');
+const statusEl = document.getElementById('status');
+const audioPlayer = document.getElementById('audioPlayer');
+const inviteBar = document.getElementById('inviteBar');
+const indefiniteBanner = document.getElementById('indefiniteBanner');
+
+// ── Load models ───────────────────────────────────────────────────
+async function loadModels() {
+  const res = await fetch('/api/models');
+  const data = await res.json();
+  models = data.models;
+  renderAvatars(models);
+}
+loadModels();
+
+function renderAvatars(models) {
+  const panel = document.getElementById('avatarPanel');
+  panel.innerHTML = models.map(m => {
+    return `
+    <div class="agent-card inactive" id="card-${m.id}" style="--agent-color:${m.color};--agent-glow:${m.color}44">
+      <div class="bubble" id="bubble-${m.id}"></div>
+      <div class="avatar-wrapper">
+        <img src="/avatars/natasha.jpg" class="avatar-img" id="img-${m.id}" alt="${m.voiceName}">
+      </div>
+      <div class="voice-name" style="color:${m.color}">${m.voiceName}</div>
+      <div class="model-label">${m.modelName}</div>
+    </div>
+  `}).join('');
+  // Fix avatar image paths after render
+  models.forEach(m => {
+    const img = document.getElementById('img-' + m.id);
+    if (img) img.src = `/avatars/${m.voiceName.toLowerCase()}.jpg`;
+  });
+}
+
+function agentCardId(id) { return document.getElementById('card-' + id); }
+function agentBubble(id) { return document.getElementById('bubble-' + id); }
+
+function highlightSpeaker(modelId) {
+  document.querySelectorAll('.agent-card').forEach(c => { c.classList.remove('active'); c.classList.add('inactive'); });
+  const card = agentCardId(modelId);
+  if (card) { card.classList.remove('inactive'); card.classList.add('active'); }
+  speakingId = modelId;
+}
+
+function clearAllHighlights() {
+  document.querySelectorAll('.agent-card').forEach(c => { c.classList.remove('active', 'inactive'); });
+  speakingId = null;
+  document.querySelectorAll('.bubble').forEach(b => b.classList.remove('visible'));
+}
+
+function updateButtons() {
+  if (haltedForUser) {
+    interruptBtn.disabled = true;
+    stopBtn.disabled = false;
+  } else {
+    interruptBtn.disabled = !conversationActive || !speakingId;
+    stopBtn.disabled = !conversationActive;
+  }
+  if (indefiniteMode) {
+    indefiniteBanner.classList.add('visible');
+  } else {
+    indefiniteBanner.classList.remove('visible');
+  }
+}
+
+// ── Strip markdown for display ────────────────────────────────────
+function stripMarkdown(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/`{1,3}[^`]*`{1,3}/g, '')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/^\d+\.\s+/gm, '')
+    .replace(/^>\s+/gm, '')
+    .trim();
+}
+
+// ── Messages ──────────────────────────────────────────────────────
+function addMessage(speaker, modelName, content, color) {
+  const div = document.createElement('div');
+  const isKyle = speaker === 'Kyle';
+  div.className = `msg ${isKyle ? 'kyle' : 'ai'}`;
+  if (!isKyle && color) {
+    div.style.background = color + '18';
+    div.style.borderLeft = `3px solid ${color}`;
+  }
+  const cleanContent = stripMarkdown(content);
+  const label = isKyle ? 'Kyle <span class="model-tag">— Human</span>' : `${speaker} <span class="model-tag">— ${modelName || ''}</span>`;
+  div.innerHTML = `
+    <div class="sender" style="color:${isKyle ? '#aaa' : color || '#aaa'}">${label}</div>
+    <div class="body">${cleanContent}</div>
+  `;
+  chatArea.appendChild(div);
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+// ── SSE consumer ──────────────────────────────────────────────────
+async function consumeSSE(response, onMeta, onToken, onDone, onHung, onError) {
+  const reader = response.body.getReader();
+  currentReader = reader;
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const data = JSON.parse(line.slice(6));
+          switch (data.type) {
+            case 'meta': onMeta(data); break;
+            case 'token': onToken(data.token); break;
+            case 'done': onDone(data); break;
+            case 'hung': onHung(data); break;
+            case 'error': onError(data.message); break;
+          }
+        } catch (e) {}
+      }
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') { /* interrupted */ }
+    else console.error('SSE error:', err);
+  } finally {
+    // Only clear if we're still the current reader
+    if (currentReader === reader) currentReader = null;
+  }
+}
+
+// ── API actions ───────────────────────────────────────────────────
+async function sendMessage(text) {
+  // Cancel any in-flight SSE stream
+  if (currentReader) {
+    try { await currentReader.cancel(); } catch (e) {}
+    currentReader = null;
+  }
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+  }
+  clearTimeout(autoContinueTimer);
+
+  // Always reset server on first message after new chat or page reload
+  if (needsReset) {
+    await fetch('/api/conversation/reset', { method: 'POST' });
+    needsReset = false;
+  }
+  // Or if conversation isn't active
+  if (!conversationActive) {
+    await fetch('/api/conversation/reset', { method: 'POST' });
+  }
+
+  addMessage('Kyle', null, text);
+  haltedForUser = false;
+  indefiniteMode = false;
+  conversationActive = true;
+  inviteBar.classList.remove('visible');
+  statusEl.textContent = '';
+  updateButtons();
+
+  currentAbortController = new AbortController();
+  const ctrl = currentAbortController;
+  const res = await fetch('/api/conversation/turn', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: text }),
+    signal: ctrl.signal,
+  }).catch(err => {
+    if (err.name === 'AbortError') return null;
+    throw err;
+  });
+  if (!res) return;
+  if (!res.ok) { const err = await res.json(); statusEl.textContent = err.error || 'Error'; conversationActive = false; updateButtons(); return; }
+  await handleStreamResponse(res);
+}
+
+async function requestNextTurn() {
+  if (!conversationActive || haltedForUser) return;
+  if (currentReader) {
+    try { await currentReader.cancel(); } catch (e) {}
+    currentReader = null;
+  }
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+  }
+  statusEl.textContent = '';
+
+  const res = await fetch('/api/conversation/next', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(30000),
+  });
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('text/event-stream')) {
+    const data = await res.json();
+    if (data.halted) return;
+    return;
+  }
+  await handleStreamResponse(res);
+}
+
+async function handleStreamResponse(res) {
+  let fullText = '';
+  let metaData = null;
+  streamActive = true;
+
+  await consumeSSE(res,
+    (meta) => {
+      metaData = meta;
+      highlightSpeaker(meta.speakerId);
+      const bubble = agentBubble(meta.speakerId);
+      if (bubble) { bubble.textContent = ''; bubble.classList.add('visible'); }
+      statusEl.textContent = `${meta.speaker} is speaking...`;
+      updateButtons();
+    },
+    (token) => {
+      fullText += token;
+      const bubble = agentBubble(speakingId);
+      if (bubble) bubble.textContent = stripMarkdown(fullText);
+    },
+    (done) => {
+      if (metaData) {
+        addMessage(done.speaker, metaData.modelName, fullText, metaData.color);
+      }
+      const bubble = agentBubble(done.speakerId);
+      if (bubble) bubble.classList.remove('visible');
+      statusEl.textContent = '';
+      updateButtons();
+
+      const hadAudio = playAudioBase64(done.audio);
+
+      if (hadAudio) {
+        audioPlayer.onended = () => {
+          playing = false;
+          cleanupAudioUrl();
+          clearAllHighlights();
+          streamActive = false;
+          if (done.invitedKyle && !indefiniteMode) {
+            haltedForUser = true;
+            inviteBar.classList.add('visible');
+            updateButtons();
+          } else {
+            scheduleNextTurn();
+          }
+        };
+      } else {
+        setTimeout(() => {
+          clearAllHighlights();
+          streamActive = false;
+          if (done.invitedKyle && !indefiniteMode) {
+            haltedForUser = true;
+            inviteBar.classList.add('visible');
+            updateButtons();
+          } else {
+            scheduleNextTurn();
+          }
+        }, 1500);
+      }
+    },
+    (hung) => {
+      clearAllHighlights();
+      streamActive = false;
+      statusEl.textContent = `Speaker timed out — picking someone else...`;
+      updateButtons();
+      scheduleNextTurn();
+    },
+    (msg) => {
+      statusEl.textContent = msg;
+      clearAllHighlights();
+      streamActive = false;
+      updateButtons();
+    }
+  );
+}
+
+function scheduleNextTurn() {
+  clearTimeout(autoContinueTimer);
+  audioPlayer.pause(); // ensure any lingering audio is done
+  autoContinueTimer = setTimeout(() => {
+    if (conversationActive && !haltedForUser && !streamActive) {
+      clearAllHighlights();
+      requestNextTurn();
+    }
+  }, 600);
+}
+
+async function interrupt() {
+  if (!conversationActive || !speakingId) return;
+  if (currentReader) { await currentReader.cancel(); currentReader = null; }
+  clearTimeout(autoContinueTimer);
+  clearAllHighlights();
+
+  const res = await fetch('/api/conversation/interrupt', { method: 'POST' });
+  const data = await res.json();
+  if (data.error) { statusEl.textContent = data.error; return; }
+
+  if (data.message) {
+    addMessage(data.message.speaker, data.message.modelName, data.message.content, data.message.color);
+    playAudioBase64(data.audio);
+  }
+
+  haltedForUser = true;
+  indefiniteMode = false;
+  conversationActive = true;
+  inviteBar.classList.remove('visible');
+  updateButtons();
+  statusEl.textContent = 'Your turn — say something';
+  textInput.focus();
+}
+
+async function stopConversation() {
+  clearTimeout(autoContinueTimer);
+  await fetch('/api/conversation/stop', { method: 'POST' });
+  conversationActive = false;
+  haltedForUser = false;
+  indefiniteMode = false;
+  inviteBar.classList.remove('visible');
+  updateButtons();
+  clearAllHighlights();
+  statusEl.textContent = 'Stopped';
+}
+
+// ── Invite handlers ───────────────────────────────────────────────
+document.getElementById('inviteRespond').addEventListener('click', () => {
+  inviteBar.classList.remove('visible');
+  statusEl.textContent = 'Your turn — say something';
+  textInput.focus();
+  updateButtons();
+});
+
+document.getElementById('inviteSkip').addEventListener('click', () => {
+  inviteBar.classList.remove('visible');
+  haltedForUser = false;
+  updateButtons();
+  requestNextTurn();
+});
+
+document.getElementById('inviteIndefinite').addEventListener('click', async () => {
+  await fetch('/api/conversation/indefinite', { method: 'POST' });
+  inviteBar.classList.remove('visible');
+  haltedForUser = false;
+  indefiniteMode = true;
+  updateButtons();
+  statusEl.textContent = 'Models talking indefinitely — press Interrupt to join';
+  requestNextTurn();
+});
+
+// ── Audio ─────────────────────────────────────────────────────────
+function playAudioBase64(b64) {
+  if (!b64 || b64.length < 100) return false;
+  cleanupAudioUrl();
+  // Remove all old listeners to prevent leaks
+  audioPlayer.onended = null;
+  audioPlayer.onerror = null;
+  try {
+    const binary = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const blob = new Blob([binary], { type: 'audio/mpeg' });
+    if (blob.size < 200) return false;
+    const url = URL.createObjectURL(blob);
+    currentAudioUrl = url;
+    audioPlayer.src = url;
+    playing = true;
+    audioPlayer.play().catch(() => { playing = false; });
+    return true;
+  } catch (e) {
+    console.error('playAudioBase64 error:', e);
+    return false;
+  }
+}
+
+function cleanupAudioUrl() {
+  if (currentAudioUrl) { URL.revokeObjectURL(currentAudioUrl); currentAudioUrl = null; }
+}
+
+// ── Speech Recognition ────────────────────────────────────────────
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let micPermission = 'prompt';
+
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+}
+
+async function checkMicPermission() {
+  try {
+    const result = await navigator.permissions.query({ name: 'microphone' });
+    micPermission = result.state;
+    result.addEventListener('change', () => { micPermission = result.state; updateMicButton(); });
+  } catch { micPermission = 'prompt'; }
+  updateMicButton();
+}
+checkMicPermission();
+
+function updateMicButton() {
+  recordBtn.classList.remove('listening');
+  isRecording = false;
+  if (micPermission === 'granted') {
+    recordBtn.textContent = 'Press and Hold to Speak';
+    recordBtn.disabled = false;
+    recordBtn.style.background = '';
+  } else if (micPermission === 'prompt') {
+    recordBtn.textContent = 'Tap to Enable Microphone';
+    recordBtn.disabled = false;
+    recordBtn.style.background = '#1a6d3c';
+  } else {
+    recordBtn.textContent = 'Mic Unavailable — Type Instead';
+    recordBtn.disabled = false;
+    recordBtn.style.background = '#5a3a1a';
+  }
+}
+
+function stopRecording() {
+  if (recognition) recognition.stop();
+  isRecording = false;
+  updateMicButton();
+}
+
+async function requestMicAndStartRecording() {
+  if (!recognition) { statusEl.textContent = 'Speech not available — type below'; return; }
+  try {
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+    micPermission = 'granted';
+    updateMicButton();
+  } catch (err) {
+    if (err.name === 'NotAllowedError') { micPermission = 'denied'; updateMicButton(); return; }
+    statusEl.textContent = 'No microphone found';
+    return;
+  }
+
+  let finalText = '';
+  recognition.onresult = (event) => {
+    let interim = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      if (event.results[i].isFinal) finalText += event.results[i][0].transcript + ' ';
+      else interim += event.results[i][0].transcript;
+    }
+    statusEl.textContent = interim || finalText || 'Listening...';
+  };
+  recognition.onerror = (event) => {
+    if (event.error === 'no-speech') return;
+    statusEl.textContent = 'Speech error — type instead';
+    isRecording = false;
+    updateMicButton();
+  };
+  recognition.onend = () => {
+    isRecording = false;
+    updateMicButton();
+    const text = finalText.trim();
+    if (text) sendMessage(text);
+  };
+
+  recognition.start();
+  isRecording = true;
+  recordBtn.textContent = 'Listening... Release to Send';
+  recordBtn.classList.add('listening');
+  setTimeout(() => { if (isRecording) stopRecording(); }, 10000);
+}
+
+// ── Event handlers ────────────────────────────────────────────────
+function handlePress(e) {
+  e.preventDefault();
+  if (playing) { audioPlayer.pause(); playing = false; }
+  if (!isRecording) requestMicAndStartRecording();
+}
+function handleRelease() { if (isRecording) stopRecording(); }
+
+recordBtn.addEventListener('pointerdown', handlePress);
+recordBtn.addEventListener('pointerup', handleRelease);
+recordBtn.addEventListener('pointerleave', handleRelease);
+recordBtn.addEventListener('touchstart', handlePress, { passive: false });
+recordBtn.addEventListener('touchend', handleRelease);
+recordBtn.addEventListener('touchcancel', handleRelease);
+
+textInput.addEventListener('keydown', async e => {
+  if (e.key === 'Enter' && textInput.value.trim()) {
+    const text = textInput.value.trim();
+    textInput.value = '';
+    await sendMessage(text);
+  }
+});
+
+interruptBtn.addEventListener('click', interrupt);
+stopBtn.addEventListener('click', stopConversation);
+
+// ── Sidebar ───────────────────────────────────────────────────────
+const sidebar = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebarToggle');
+const chatListEl = document.getElementById('chatList');
+const newChatBtn = document.getElementById('newChatBtn');
+let sidebarOpen = true;
+
+sidebarToggle.addEventListener('click', () => {
+  sidebarOpen = !sidebarOpen;
+  sidebar.classList.toggle('collapsed', !sidebarOpen);
+  sidebarToggle.textContent = sidebarOpen ? '◀' : '▶';
+});
+
+async function saveChat() {
+  try {
+    const res = await fetch('/api/chats', { method: 'POST' });
+    if (res.ok) await loadChatList();
+  } catch (e) {}
+}
+
+async function loadChatList() {
+  try {
+    const res = await fetch('/api/chats');
+    const chats = await res.json();
+    chatListEl.innerHTML = chats.map(c => `
+      <div class="chat-item" data-id="${c.id}">
+        <span class="title" title="${c.title}">${c.title || 'Untitled'}</span>
+        <button class="del-btn" data-id="${c.id}">&times;</button>
+      </div>
+    `).join('') || '<div style="color:#555;font-size:0.8rem;padding:12px;text-align:center">No saved chats</div>';
+
+    // Click to open
+    chatListEl.querySelectorAll('.chat-item .title').forEach(el => {
+      el.parentElement.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('del-btn')) return;
+        const id = el.parentElement.dataset.id;
+        try {
+          const res = await fetch(`/api/chats/${id}`);
+          const data = await res.json();
+          // Stop current
+          await fetch('/api/conversation/stop', { method: 'POST' });
+          // Render messages
+          chatArea.innerHTML = '';
+          data.messages.forEach(m => {
+            const isKyle = m.speaker === 'Kyle';
+            const color = models.find(mod => mod.voiceName === m.speaker)?.color;
+            if (!isKyle) addMessage(m.speaker, m.model, m.content, color);
+            else addMessage('Kyle', null, m.content);
+          });
+          conversationActive = true;
+          haltedForUser = false;
+          updateButtons();
+          statusEl.textContent = 'Loaded — say something to continue';
+          // Tell server about loaded state
+          await fetch('/api/chats/' + id);
+        } catch (e) { console.error('Load error:', e); }
+      });
+    });
+
+    // Delete button
+    chatListEl.querySelectorAll('.del-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        await fetch(`/api/chats/${id}`, { method: 'DELETE' });
+        loadChatList();
+      });
+    });
+  } catch (e) {}
+}
+
+newChatBtn.addEventListener('click', async () => {
+  // Clear any in-flight stream
+  if (currentReader) { await currentReader.cancel(); currentReader = null; }
+  clearTimeout(autoContinueTimer);
+
+  // Save current if there are messages in the chat
+  const hasMessages = chatArea.querySelectorAll('.msg').length > 0;
+  if (hasMessages) {
+    try { await fetch('/api/chats', { method: 'POST' }); } catch (e) {}
+  }
+
+  await fetch('/api/conversation/reset', { method: 'POST' });
+  chatArea.innerHTML = '';
+  conversationActive = false;
+  haltedForUser = false;
+  indefiniteMode = false;
+  clearAllHighlights();
+  inviteBar.classList.remove('visible');
+  indefiniteBanner.classList.remove('visible');
+  updateButtons();
+  statusEl.textContent = 'New conversation — say something to start';
+  needsReset = true;
+  loadChatList();
+});
+
+// Save chat when stopping
+async function stopAndSave() {
+  if (conversationActive && chatArea.querySelectorAll('.msg').length > 0) {
+    await saveChat();
+  }
+  await fetch('/api/conversation/stop', { method: 'POST' });
+  conversationActive = false;
+  haltedForUser = false;
+  indefiniteMode = false;
+  inviteBar.classList.remove('visible');
+  updateButtons();
+  clearAllHighlights();
+  statusEl.textContent = 'Stopped';
+}
+// Replace the original stop handler
+stopBtn.removeEventListener('click', stopConversation);
+stopBtn.addEventListener('click', stopAndSave);
+
+// Save on page unload
+window.addEventListener('beforeunload', () => {
+  if (conversationActive && chatArea.querySelectorAll('.msg').length > 0) {
+    navigator.sendBeacon('/api/chats', JSON.stringify({}));
+  }
+});
+
+// Load sidebar on start
+loadChatList();
+
+// ── Fix sidebar toggle positioning ────────────────────────────────
+sidebarToggle.style.top = '84px';
+</script>
+</body>
+</html>
