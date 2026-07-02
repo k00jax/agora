@@ -717,20 +717,30 @@ async function handleStreamResponse(res) {
 
       const hadAudio = playAudioBase64(done.audio);
 
+      const advance = () => {
+        if (!streamActive) return;
+        playing = false;
+        cleanupAudioUrl();
+        clearAllHighlights();
+        streamActive = false;
+        if (done.invitedKyle && !indefiniteMode) {
+          haltedForUser = true;
+          inviteBar.classList.add('visible');
+          updateButtons();
+        } else {
+          scheduleNextTurn();
+        }
+      };
+
       if (hadAudio) {
-        audioPlayer.onended = () => {
-          playing = false;
-          cleanupAudioUrl();
-          clearAllHighlights();
-          streamActive = false;
-          if (done.invitedKyle && !indefiniteMode) {
-            haltedForUser = true;
-            inviteBar.classList.add('visible');
-            updateButtons();
-          } else {
-            scheduleNextTurn();
-          }
-        };
+        audioPlayer.onended = advance;
+        audioPlayer.onerror = advance;
+        // Safety timeout — if audio doesn't start/finish within 30s, force advance
+        const safetyTimeout = setTimeout(() => {
+          if (streamActive && playing) advance();
+        }, 30000);
+        const origOnEnded = audioPlayer.onended;
+        audioPlayer.onended = () => { clearTimeout(safetyTimeout); origOnEnded?.(); };
       } else {
         setTimeout(() => {
           clearAllHighlights();

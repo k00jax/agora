@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   if (conversationId) {
     await db.update(conversations)
       .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(conversations.id, conversationId));
+      .where(and(eq(conversations.id, conversationId), eq(conversations.userId, user.id)));
   }
 
   return NextResponse.json({ ok: true });

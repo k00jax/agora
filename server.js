@@ -179,16 +179,19 @@ async function generateSpeech(text, voice) {
     await new Promise(resolve => setTimeout(resolve, 100));
     const result = await execAsync(
       'python', ['tts.py', textFile, voice, audioFile],
-      { timeout: 25000, cwd: __dirname }
+      { timeout: 30000, cwd: __dirname }
     );
     if (result.stderr) console.error(`TTS stderr [${voice}]:`, result.stderr.slice(0, 200));
     const stats = await fs.stat(audioFile);
+    console.log(`TTS [${voice}]: ${stats.size} bytes, text: ${cleanText.length} chars`);
     if (stats.size < 200) {
-      console.error(`TTS empty/short audio for ${voice}: ${stats.size} bytes, text length: ${cleanText.length}`);
+      console.error(`TTS empty/short audio for ${voice}: ${stats.size} bytes`);
       return null;
     }
     const audio = await fs.readFile(audioFile);
-    return audio.toString('base64');
+    const b64 = audio.toString('base64');
+    console.log(`TTS [${voice}]: base64 length ${b64.length}`);
+    return b64;
   } catch (err) {
     console.error(`TTS error [${voice}]:`, (err.stderr || err.message || err).toString().slice(0, 200));
     return null;
