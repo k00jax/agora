@@ -14,7 +14,7 @@ export interface ModelDef {
 
 export const ALL_MODELS: ModelDef[] = [
   {
-    id: 'grok', voiceName: 'Natasha', modelName: 'Grok', modelApiId: 'grok-3',
+    id: 'grok', voiceName: 'Gwen', modelName: 'Grok', modelApiId: 'grok-3',
     voice: 'en-AU-NatashaNeural', color: '#9B59B6', provider: 'grok',
     creditMultiplier: 1.0, envKey: 'GROK_API_KEY',
   },
@@ -25,17 +25,17 @@ export const ALL_MODELS: ModelDef[] = [
   },
   {
     id: 'gemini', voiceName: 'Jenny', modelName: 'Gemini', modelApiId: 'gemini-2.5-flash',
-    voice: 'en-US-JennyNeural', color: '#70AD47', provider: 'gemini',
+    voice: 'en-GB-SoniaNeural', color: '#70AD47', provider: 'gemini',
     creditMultiplier: 0.5, envKey: 'GEMINI_API_KEY',
   },
   {
-    id: 'claude', voiceName: 'Christopher', modelName: 'Claude', modelApiId: 'claude-sonnet-5',
+    id: 'claude', voiceName: 'Clarence', modelName: 'Claude', modelApiId: 'claude-sonnet-5',
     voice: 'en-US-ChristopherNeural', color: '#BF8F4A', provider: 'anthropic',
     creditMultiplier: 2.0, envKey: 'ANTHROPIC_API_KEY',
   },
   {
     id: 'chatgpt', voiceName: 'Chad', modelName: 'ChatGPT', modelApiId: 'gpt-4o-mini',
-    voice: 'en-US-SteffanNeural', color: '#5B9BD5', provider: 'openai',
+    voice: 'en-US-BrianNeural', color: '#5B9BD5', provider: 'openai',
     creditMultiplier: 1.0, envKey: 'OPENAI_API_KEY',
   },
 ];
