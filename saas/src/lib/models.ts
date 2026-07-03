@@ -35,7 +35,7 @@ export const ALL_MODELS: ModelDef[] = [
   },
   {
     id: 'chatgpt', voiceName: 'Chad', modelName: 'ChatGPT', modelApiId: 'gpt-4o-mini',
-    voice: 'en-US-BrianNeural', color: '#5B9BD5', provider: 'openai',
+    voice: 'en-US-SteffanNeural', color: '#5B9BD5', provider: 'openai',
     creditMultiplier: 1.0, envKey: 'OPENAI_API_KEY',
   },
 ];

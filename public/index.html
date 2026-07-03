@@ -176,6 +176,17 @@
     width: 100%; height: 100%;
     object-fit: cover;
   }
+  .agent-card .logo-badge {
+    position: absolute;
+    bottom: 38px;
+    right: 26px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: none;
+    object-fit: cover;
+    z-index: 2;
+  }
   .agent-card .voice-name {
     font-size: 1.3rem;
     font-weight: 600;
@@ -227,6 +238,17 @@
     opacity: 0.65;
     text-transform: none;
     letter-spacing: 0;
+  }
+  .msg .sender .move-badge {
+    font-size: 0.62rem;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-right: 2px;
+    vertical-align: text-top;
+    background: rgba(255,255,255,0.12);
+    color: #ccc;
+    letter-spacing: 0.4px;
   }
   .msg .body { white-space: pre-wrap; font-size: 0.92rem; }
   @keyframes msgIn { from { opacity: 0; transform: translateY(6px); } }
@@ -500,21 +522,18 @@ loadModels();
 function renderAvatars(models) {
   const panel = document.getElementById('avatarPanel');
   panel.innerHTML = models.map(m => {
+    const logoName = m.id === 'chatgpt' ? 'chatgpt' : m.id === 'claude' ? 'claude' : m.id === 'gemini' ? 'gemini' : m.id === 'deepseek' ? 'deepseek' : 'grok';
     return `
     <div class="agent-card inactive" id="card-${m.id}" style="--agent-color:${m.color};--agent-glow:${m.color}44">
       <div class="bubble" id="bubble-${m.id}"></div>
       <div class="avatar-wrapper">
-        <img src="/avatars/natasha.jpg" class="avatar-img" id="img-${m.id}" alt="${m.voiceName}">
+        <img src="/avatars/${m.voiceName.toLowerCase()}.jpg" class="avatar-img" id="img-${m.id}" alt="${m.voiceName}">
       </div>
+      <img src="/avatars/${logoName}-logo.jpg" class="logo-badge" alt="${m.modelName} logo">
       <div class="voice-name" style="color:${m.color}">${m.voiceName}</div>
       <div class="model-label">${m.modelName}</div>
     </div>
   `}).join('');
-  // Fix avatar image paths after render
-  models.forEach(m => {
-    const img = document.getElementById('img-' + m.id);
-    if (img) img.src = `/avatars/${m.voiceName.toLowerCase()}.jpg`;
-  });
 }
 
 function agentCardId(id) { return document.getElementById('card-' + id); }
@@ -579,7 +598,7 @@ function stripMarkdown(text) {
 }
 
 // ── Messages ──────────────────────────────────────────────────────
-function addMessage(speaker, modelName, content, color) {
+function addMessage(speaker, modelName, content, color, v3type) {
   const div = document.createElement('div');
   const isKyle = speaker === 'Kyle';
   div.className = `msg ${isKyle ? 'kyle' : 'ai'}`;
@@ -587,12 +606,31 @@ function addMessage(speaker, modelName, content, color) {
     div.style.background = color + '18';
     div.style.borderLeft = `3px solid ${color}`;
   }
-  const cleanContent = stripMarkdown(content);
-  const label = isKyle ? 'Kyle <span class="model-tag">— Human</span>' : `${speaker} <span class="model-tag">— ${modelName || ''}</span>`;
-  div.innerHTML = `
-    <div class="sender" style="color:${isKyle ? '#aaa' : color || '#aaa'}">${label}</div>
-    <div class="body">${cleanContent}</div>
-  `;
+
+  // sender line
+  const senderDiv = document.createElement('div');
+  senderDiv.className = 'sender';
+  senderDiv.style.color = isKyle ? '#aaa' : (color || '#aaa');
+  if (!isKyle && v3type) {
+    const badge = document.createElement('span');
+    badge.className = 'move-badge';
+    badge.textContent = v3type;
+    senderDiv.appendChild(badge);
+    senderDiv.appendChild(document.createTextNode(' '));
+  }
+  senderDiv.appendChild(document.createTextNode(speaker));
+  const tag = document.createElement('span');
+  tag.className = 'model-tag';
+  tag.textContent = isKyle ? ' — Human' : ` — ${modelName || ''}`;
+  senderDiv.appendChild(tag);
+
+  // body
+  const bodyDiv = document.createElement('div');
+  bodyDiv.className = 'body';
+  bodyDiv.textContent = stripMarkdown(content);
+
+  div.appendChild(senderDiv);
+  div.appendChild(bodyDiv);
   chatArea.appendChild(div);
   chatArea.scrollTop = chatArea.scrollHeight;
 }
@@ -748,7 +786,7 @@ async function handleStreamResponse(res) {
     (done) => {
       clearInterval(safetyInterval);
       if (metaData) {
-        addMessage(done.speaker, metaData.modelName, fullText, metaData.color);
+        addMessage(done.speaker, metaData.modelName, fullText, metaData.color, done.v3type);
         prevSpeakerIds.unshift(metaData.speakerId);
         prevSpeakerIds = prevSpeakerIds.slice(0, 2);
       }

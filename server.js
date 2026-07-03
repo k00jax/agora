@@ -24,7 +24,7 @@ const ALL_MODELS = [
   { id: 'deepseek', voiceName: 'Derrick',     modelName: 'DeepSeek', voice: 'en-GB-RyanNeural',        color: '#E56060', envKey: 'DEEPSEEK_API_KEY' },
   { id: 'gemini',   voiceName: 'Jenny',       modelName: 'Gemini',   voice: 'en-GB-SoniaNeural',        color: '#70AD47', envKey: 'GEMINI_API_KEY' },
   { id: 'claude',   voiceName: 'Clarence',    modelName: 'Claude',   voice: 'en-US-ChristopherNeural', color: '#BF8F4A', envKey: 'ANTHROPIC_API_KEY' },
-  { id: 'chatgpt',  voiceName: 'Chad',        modelName: 'ChatGPT',  voice: 'en-US-BrianNeural',        color: '#5B9BD5', envKey: 'OPENAI_API_KEY' },
+  { id: 'chatgpt',  voiceName: 'Chad',        modelName: 'ChatGPT',  voice: 'en-US-SteffanNeural',     color: '#5B9BD5', envKey: 'OPENAI_API_KEY' },
 ];
 
 const MODELS = ALL_MODELS.filter(m => process.env[m.envKey]);
@@ -177,7 +177,7 @@ let conversation = null;
 let generation = 0;
 
 function freshAgentStatus() {
-  return { discuss_remaining: 1, procedural_remaining: 2, regress_used: [], confirm_test_ratio: '0:0', confirmCount: 0, testCount: 0 };
+  return { discuss_remaining: 1, procedural_remaining: 2, regress_used: [], confirm_test_ratio: '0:0', confirmCount: 0, testCount: 0, search_remaining: 3, run_remaining: 2 };
 }
 
 function resetConversation() {
@@ -209,6 +209,7 @@ function resetConversation() {
 
     // ── Agent status ──
     agentStatus: {},            // {modelId: {...}} — freshAgentStatus on reset
+    speakerPool: [],            // round-robin: models yet to speak this round
 
     // ── v3 Enforcement ──
     priorRebuts: {},           // {modelId: [claimId, ...]} — for duplicate-REBUT check
@@ -355,6 +356,16 @@ function validateMove(parsed, voiceName, modelId) {
   }
   if (['PROPOSE', 'AMEND', 'VOTE'].includes(mt) && (status.procedural_remaining || 0) <= 0) {
     return { valid: false, error: 'Procedural budget exhausted (2/segment). Make a content move instead.' };
+  }
+  if (mt === 'SEARCH' && (status.search_remaining || 0) <= 0) {
+    return { valid: false, error: 'SEARCH budget exhausted (3/segment).' };
+  }
+  // RUN budget: 2/segment, but challenges to existing runs are free
+  if (mt === 'RUN' && (status.run_remaining || 0) <= 0) {
+    const isChallenge = parsed.args.intent && /challenge|parameter/i.test(parsed.args.intent);
+    if (!isChallenge) {
+      return { valid: false, error: 'RUN budget exhausted (2/segment). Parameter challenges are free.' };
+    }
   }
 
   // QUERY check — one outstanding at a time
@@ -558,7 +569,7 @@ function ddgSearch(query) {
     // Path 1: Brave Search API if key is configured
     if (process.env.BRAVE_API_KEY) {
       const braveUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
-      https.get(braveUrl, { headers: { 'Accept': 'application/json', 'Accept-Encoding': 'gzip', 'X-Subscription-Token': process.env.BRAVE_API_KEY }, timeout: 8000 }, (resp) => {
+      https.get(braveUrl, { headers: { 'Accept': 'application/json', 'X-Subscription-Token': process.env.BRAVE_API_KEY }, timeout: 8000 }, (resp) => {
         let data = '';
         resp.on('data', c => data += c);
         resp.on('end', () => {
@@ -683,18 +694,36 @@ function processMove(rawText, voiceName, modelId) {
       break;
     }
     case 'CONCEDE': boardConcede(parsed, voiceName); break;
-    case 'EVIDENCE': boardRecordEvidence(parsed, voiceName); break;
     case 'SEARCH': {
       // Track intent for confirm:test ratio
       if (parsed.args.intent === 'confirm') st.confirmCount = (st.confirmCount || 0) + 1;
       if (parsed.args.intent === 'test') st.testCount = (st.testCount || 0) + 1;
+      st.search_remaining = Math.max(0, (st.search_remaining || 3) - 1);
       break;
     }
-    case 'PROPOSE': boardPropose(parsed, voiceName, modelId); break;
-    case 'AMEND': boardAmend(parsed, voiceName); break;
-    case 'VOTE': boardVote(parsed, voiceName); break;
-    case 'DISCUSS': st.discuss_remaining = Math.max(0, (st.discuss_remaining || 1) - 1); break;
-    case 'QUERY': conversation.queryOutstanding = true; break;
+    case 'RUN': {
+      const isChallenge = parsed.args.intent && /challenge|parameter/i.test(parsed.args.intent);
+      if (!isChallenge) st.run_remaining = Math.max(0, (st.run_remaining || 2) - 1);
+      // Mark targeted evidence as contested if this challenges an existing run
+      if (isChallenge && parsed.args.claimId) {
+        (conversation.evidenceLedger || []).forEach(e => {
+          if (e.claim === parsed.args.claimId) e.status = 'contested';
+        });
+      }
+      break;
+    }
+    case 'EVIDENCE': {
+      boardRecordEvidence(parsed, voiceName);
+      // If this EVIDENCE cites someone else's search/run, mark them as verified
+      if (parsed.args.src) {
+        (conversation.evidenceLedger || []).forEach(e => {
+          if (e.src === parsed.args.src && e.attested_by !== voiceName && !e.verified_by.includes(voiceName)) {
+            e.verified_by.push(voiceName);
+          }
+        });
+      }
+      break;
+    }
   }
 
   // Deduct procedural budgets
@@ -722,6 +751,24 @@ function processMove(rawText, voiceName, modelId) {
   conversation.recentMoves.push(moveRecord);
   conversation.allMoves = conversation.allMoves || [];
   conversation.allMoves.push(moveRecord);
+
+  // R7: Topic change detection → reset segment budgets
+  if (detectTopicChange(rawText)) {
+    conversation.topicSegments = (conversation.topicSegments || 0) + 1;
+    conversation.queryOutstanding = false;
+    conversation.priorRebuts = {}; // reset rebut tracking per topic
+    for (const mid of MODELS.map(m => m.id)) {
+      const s = (conversation.agentStatus || {})[mid] || {};
+      if (s) {
+        s.discuss_remaining = 1;
+        s.procedural_remaining = 2;
+        s.search_remaining = 3;
+        s.run_remaining = 2;
+        s.regress_used = [];
+      }
+    }
+    console.log(`R7: Topic segment #${conversation.topicSegments} — budgets reset`);
+  }
 
   return { parsed, moveRecord };
 }
@@ -789,19 +836,24 @@ function pickNextSpeaker(triggerMessage) {
     if (matches.length > 0) return matches[0].model;
   }
 
-  const available = MODELS.map(m => m.id);
+  const allIds = MODELS.map(m => m.id);
 
-  // Count turns since each model last spoke
-  const turnsSince = {};
-  for (const mid of available) turnsSince[mid] = Infinity;
-  for (let i = conversation.messages.length - 1, count = 0; i >= 0; i--) {
-    const msg = conversation.messages[i];
-    if (msg.speaker === 'Kyle') continue;
-    count++;
-    const model = MODELS.find(m => m.voiceName === msg.speaker);
-    if (model && turnsSince[model.id] === Infinity) {
-      turnsSince[model.id] = count;
-    }
+  // Fairness pool: once a model speaks, they're removed from the pool.
+  // When the pool empties or has only excluded models, everyone refreshes back in.
+  conversation.speakerPool = conversation.speakerPool || [];
+
+  // Remove already-spoken-this-round from pool
+  const availablePool = conversation.speakerPool.filter(id =>
+    allIds.includes(id) && id !== conversation.lastSpeakers[0]
+  );
+
+  // If pool is exhausted or only has excluded candidates, refill
+  if (availablePool.length === 0) {
+    conversation.speakerPool = [...allIds];
+    // Remove last speaker from fresh pool too
+    const fresh = conversation.speakerPool.filter(id => id !== conversation.lastSpeakers[0]);
+    if (fresh.length > 0) conversation.speakerPool = fresh;
+    console.log(`Speaker pool refilled: ${conversation.speakerPool.join(', ')}`);
   }
 
   // R2: Anti-dyad — detect A->B->A->B pattern in last 4 AI turns
@@ -815,43 +867,80 @@ function pickNextSpeaker(triggerMessage) {
   if (modelIds.length >= 4) {
     const last4 = modelIds.slice(-4);
     if (last4[0] === last4[2] && last4[1] === last4[3] && last4[0] !== last4[1]) {
-      dyadPartner = last4[1]; // the other member of the dyad
+      dyadPartner = last4[1];
     }
   }
 
-  // R1: exclude agents with 3 consecutive mutes (sitting out until topic change)
+  // R1: exclude 3x-muted agents
   const mutedOut = new Set(
     Object.entries(conversation.muteStreaks || {}).filter(([, n]) => n >= 3).map(([id]) => id)
   );
 
-  // R3: during crux rounds, prefer agents who haven't answered yet
+  // R3: crux rounds — prioritize unanswered
   const cruxAnswered = conversation.cruxRoundActive ? (conversation.cruxAnswered || new Set()) : new Set();
-  const crucNeedsAnswer = available.filter(id => !cruxAnswered.has(id));
+  const crucNeedsAnswer = availablePool.filter(id => !cruxAnswered.has(id));
 
-  // Exclude last speaker, dyad partner, and 3x-muted agents
   const exclude = new Set([conversation.lastSpeakers[0], dyadPartner, ...mutedOut].filter(Boolean));
-  let candidates = available.filter(id => !exclude.has(id));
-  // During crux round, prioritize unanswered agents
+
+  // Build candidates from pool, excluding blocked models
+  let candidates = availablePool.filter(id => !exclude.has(id));
   if (conversation.cruxRoundActive && crucNeedsAnswer.length > 0) {
-    candidates = crucNeedsAnswer.filter(id => !exclude.has(id) || crucNeedsAnswer.length === 1);
+    candidates = crucNeedsAnswer.filter(id => !exclude.has(id));
     if (candidates.length === 0) candidates = crucNeedsAnswer;
   }
   if (candidates.length === 0) {
-    candidates = available.filter(id => id !== conversation.lastSpeakers[0] && !mutedOut.has(id));
+    candidates = availablePool;
   }
   if (candidates.length === 0) {
-    candidates = available.filter(id => id !== conversation.lastSpeakers[0]);
+    candidates = allIds.filter(id => id !== conversation.lastSpeakers[0]);
   }
   if (candidates.length === 0) return MODELS[Math.floor(Math.random() * MODELS.length)];
 
-  const weights = candidates.map(id => Math.pow(turnsSince[id] || 1, 2));
-  const totalWeight = weights.reduce((a, b) => a + b, 0);
-  let roll = Math.random() * totalWeight;
-  for (let i = 0; i < candidates.length; i++) {
-    roll -= weights[i];
-    if (roll <= 0) return MODELS.find(m => m.id === candidates[i]);
+  // Pick randomly from pool candidates (equal weight, not turns-since-biased)
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+
+  // Remove from pool so they don't speak again until pool refills
+  conversation.speakerPool = conversation.speakerPool.filter(id => id !== pick);
+
+  return MODELS.find(m => m.id === pick);
+}
+
+// ── Strip grammar header + markdown for TTS ────────────────────────
+function ttsText(rawText, parsed) {
+  let text = rawText;
+  if (parsed && (parsed.moveType === 'DISCUSS' || parsed.moveType === 'PASS')) {
+    text = parsed.body || rawText;
+  } else if (parsed) {
+    // Strip the move label and args, keep only the body after the first pipe
+    const pipeIdx = rawText.indexOf('|');
+    text = pipeIdx > 0 ? rawText.slice(pipeIdx + 1).trim() : rawText;
   }
-  return MODELS.find(m => m.id === candidates[candidates.length - 1]);
+  // Always strip grammar keywords and metadata
+  return stripMarkdown(text)
+    .replace(/^CLAIM\s+\S+\s*\|\s*/i, '')
+    .replace(/^REBUT\s+\S+\s*\|\s*/i, '')
+    .replace(/^REFINE\s+\S+\s*\|\s*/i, '')
+    .replace(/^CONCEDE\s+\S+\s*\|\s*/i, '')
+    .replace(/^EVIDENCE\s+\S+\s*\|\s*/i, '')
+    .replace(/^SEARCH\s+\S+\s*\|\s*/i, '')
+    .replace(/^RUN\s+\S+\s*\|\s*/i, '')
+    .replace(/^PROPOSE\s+\S+\s*\|\s*/i, '')
+    .replace(/^AMEND\s+\S+\s*\|\s*/i, '')
+    .replace(/^VOTE\s+\S+\s*\|\s*/i, '')
+    .replace(/^CHALLENGE\s+\S+\s*\|\s*/i, '')
+    .replace(/^QUERY\s+@?\S*\s*\|\s*/i, '')
+    .replace(/^DISCUSS\s*\|\s*/i, '')
+    .replace(/^PASS\b\s*/i, '')
+    .replace(/crux\s*:\s*.+/gi, '')
+    .replace(/steel\s*:\s*"[^"]*"/gi, '')
+    .replace(/src\s*:\s*\S+/gi, '')
+    .replace(/intent\s*:\s*"[^"]*"/gi, '')
+    .replace(/assumptions\s*:\s*\[[^\]]*\]/gi, '')
+    .replace(/q\s*:\s*"[^"]*"/gi, '')
+    .replace(/body\s*≤?\s*\d+\s*tokens/gi, '')
+    .replace(/\|/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 // ── Strip markdown for TTS ─────────────────────────────────────────
@@ -867,6 +956,17 @@ function stripMarkdown(text) {
     .replace(/\n{3,}/g, '\n\n')         // excessive newlines
     .replace(/\[INVITE_KYLE\]/gi, '')
     .replace(/\[USER_INTERRUPT\]/gi, '')
+    // v3 grammar stripping (fallback for when ttsText misses something)
+    .replace(/\b(CLAIM|REBUT|REFINE|CONCEDE|EVIDENCE|SEARCH|RUN|PROPOSE|AMEND|VOTE|CHALLENGE|QUERY|DISCUSS|PASS)\s+\S*\s*\|\s*/gi, '')
+    .replace(/crux\s*:\s*.+/gi, '')
+    .replace(/steel\s*:\s*"[^"]*"/gi, '')
+    .replace(/src\s*:\s*\S+/gi, '')
+    .replace(/intent\s*:\s*(confirm|test|"[^"]*")/gi, '')
+    .replace(/assumptions\s*:\s*\[[^\]]*\]/gi, '')
+    .replace(/q\s*:\s*"[^"]*"/gi, '')
+    .replace(/body\s*≤?\s*\d+\s*tokens/gi, '')
+    .replace(/\|/g, '')
+    .replace(/\s{2,}/g, ' ')
     .trim();
 }
 
@@ -1158,11 +1258,12 @@ app.post('/api/conversation/turn', async (req, res) => {
   updateRollingSummary();
 
   const isToolMove = moveResult?.parsed && ['SEARCH', 'RUN'].includes(moveResult.parsed.moveType);
-  const audio = (muted || isToolMove) ? null : await generateSpeech(fullText, model.voice);
+  const audio = (muted || isToolMove) ? null : await generateSpeech(ttsText(fullText, moveResult?.parsed), model.voice);
   if (generation !== myGen) { try { res.end(); } catch (e) {} return; }
 
   const didInviteKyle = conversation.turnCount >= 3 && conversation.turnCount % 5 === 0;
-  sseWrite(res, { type: 'done', audio, speaker: model.voiceName, speakerId: model.id, invitedKyle: didInviteKyle && !conversation.indefinite, muted });
+  const v3type = moveResult?.parsed?.moveType || 'PASS';
+  sseWrite(res, { type: 'done', audio, speaker: model.voiceName, speakerId: model.id, invitedKyle: didInviteKyle && !conversation.indefinite, muted, v3type });
   res.end();
 });
 
@@ -1253,11 +1354,12 @@ app.post('/api/conversation/next', async (req, res) => {
   updateRollingSummary();
 
   const isToolMove = moveResult?.parsed && ['SEARCH', 'RUN'].includes(moveResult.parsed.moveType);
-  const audio = (muted || isToolMove) ? null : await generateSpeech(fullText, model.voice);
+  const audio = (muted || isToolMove) ? null : await generateSpeech(ttsText(fullText, moveResult?.parsed), model.voice);
   if (generation !== myGen) { try { res.end(); } catch (e) {} return; }
 
   const didInviteKyle = !conversation.indefinite && conversation.turnCount >= 3 && conversation.turnCount % 5 === 0;
-  sseWrite(res, { type: 'done', audio, speaker: model.voiceName, speakerId: model.id, invitedKyle: didInviteKyle, muted });
+  const v3type = moveResult?.parsed?.moveType || 'PASS';
+  sseWrite(res, { type: 'done', audio, speaker: model.voiceName, speakerId: model.id, invitedKyle: didInviteKyle, muted, v3type });
   res.end();
 });
 
