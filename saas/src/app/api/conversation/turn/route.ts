@@ -36,7 +36,23 @@ function pickNextSpeaker(
     if (model && turnsSince[model.id] === Infinity) turnsSince[model.id] = count;
   }
 
-  const candidates = ALL_MODELS.filter(m => m.id !== recentSpeakers[0]);
+  // R2: Anti-dyad — detect A->B->A->B pattern in last 4 AI turns
+  const aiModelIds = conversationMessages
+    .filter(m => m.speaker !== 'User')
+    .map(m => ALL_MODELS.find(mm => mm.voiceName === m.speaker)?.id)
+    .filter(Boolean) as string[];
+
+  let dyadPartner: string | null = null;
+  if (aiModelIds.length >= 4) {
+    const last4 = aiModelIds.slice(-4);
+    if (last4[0] === last4[2] && last4[1] === last4[3] && last4[0] !== last4[1]) {
+      dyadPartner = last4[1];
+    }
+  }
+
+  const exclude = new Set([recentSpeakers[0], dyadPartner].filter(Boolean));
+  let candidates = ALL_MODELS.filter(m => !exclude.has(m.id));
+  if (candidates.length === 0) candidates = ALL_MODELS.filter(m => m.id !== recentSpeakers[0]);
   if (candidates.length === 0) return ALL_MODELS[Math.floor(Math.random() * ALL_MODELS.length)];
 
   const weights = candidates.map(m => Math.pow(turnsSince[m.id] || 1, 2));
@@ -140,22 +156,10 @@ export async function POST(req: NextRequest) {
   });
   const isIndefinite = conv?.indefiniteMode ?? false;
 
-  // INVITE_USER and BREAK_LOOP detection
+  // INVITE_USER detection
   let extra = '';
   const aiCount = existingMessages.filter(m => m.speaker !== 'User').length;
   if (!isIndefinite && aiCount >= 3 && aiCount % 5 === 0) extra = '[INVITE_USER] ';
-
-  const aiMsgs = existingMessages.filter(m => m.speaker !== 'User');
-  if (aiMsgs.length >= 5) {
-    const recent = aiMsgs.slice(-5);
-    let pairCount = 0;
-    for (let i = 2; i < recent.length; i++) {
-      if (recent[i].speaker === recent[i - 2].speaker && recent[i].speaker !== recent[i - 1].speaker) {
-        pairCount++;
-      }
-    }
-    if (pairCount >= 2) extra = extra + '[BREAK_LOOP] ';
-  }
 
   const userMessageForModel = `${contextBlock}The last speaker was ${lastMsg?.speaker || 'nobody'}: "${lastMsg?.content || ''}"\n\n${extra}Respond as ${model.voiceName}.`;
 

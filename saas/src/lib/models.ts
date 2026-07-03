@@ -19,13 +19,13 @@ export const ALL_MODELS: ModelDef[] = [
     creditMultiplier: 1.0, envKey: 'GROK_API_KEY',
   },
   {
-    id: 'deepseek', voiceName: 'Andrew', modelName: 'DeepSeek', modelApiId: 'deepseek-chat',
-    voice: 'en-US-AndrewNeural', color: '#E56060', provider: 'deepseek',
+    id: 'deepseek', voiceName: 'Derrick', modelName: 'DeepSeek', modelApiId: 'deepseek-chat',
+    voice: 'en-GB-RyanNeural', color: '#E56060', provider: 'deepseek',
     creditMultiplier: 1.0, envKey: 'DEEPSEEK_API_KEY',
   },
   {
-    id: 'gemini', voiceName: 'Libby', modelName: 'Gemini', modelApiId: 'gemini-2.5-flash',
-    voice: 'en-GB-LibbyNeural', color: '#70AD47', provider: 'gemini',
+    id: 'gemini', voiceName: 'Jenny', modelName: 'Gemini', modelApiId: 'gemini-2.5-flash',
+    voice: 'en-US-JennyNeural', color: '#70AD47', provider: 'gemini',
     creditMultiplier: 0.5, envKey: 'GEMINI_API_KEY',
   },
   {
@@ -34,8 +34,8 @@ export const ALL_MODELS: ModelDef[] = [
     creditMultiplier: 2.0, envKey: 'ANTHROPIC_API_KEY',
   },
   {
-    id: 'chatgpt', voiceName: 'William', modelName: 'ChatGPT', modelApiId: 'gpt-4o-mini',
-    voice: 'en-AU-WilliamNeural', color: '#5B9BD5', provider: 'openai',
+    id: 'chatgpt', voiceName: 'Chad', modelName: 'ChatGPT', modelApiId: 'gpt-4o-mini',
+    voice: 'en-US-SteffanNeural', color: '#5B9BD5', provider: 'openai',
     creditMultiplier: 1.0, envKey: 'OPENAI_API_KEY',
   },
 ];

@@ -6,11 +6,11 @@ import { createClient } from '@/lib/supabase/client';
 
 const PROVIDER_ORDER = ['openai', 'anthropic', 'gemini', 'grok', 'deepseek'];
 const PROVIDER_LABELS: Record<string, { name: string; model: string; color: string }> = {
-  openai: { name: 'William', model: 'ChatGPT', color: '#5B9BD5' },
+  openai: { name: 'Chad', model: 'ChatGPT', color: '#5B9BD5' },
   anthropic: { name: 'Christopher', model: 'Claude', color: '#BF8F4A' },
-  gemini: { name: 'Libby', model: 'Gemini', color: '#70AD47' },
+  gemini: { name: 'Jenny', model: 'Gemini', color: '#70AD47' },
   grok: { name: 'Natasha', model: 'Grok', color: '#9B59B6' },
-  deepseek: { name: 'Andrew', model: 'DeepSeek', color: '#E56060' },
+  deepseek: { name: 'Derrick', model: 'DeepSeek', color: '#E56060' },
 };
 
 const TOKEN_PACKAGES = [

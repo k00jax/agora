@@ -86,7 +86,24 @@ export async function POST(req: NextRequest) {
       const found = ALL_MODELS.find(mod => mod.voiceName === cm.speaker);
       if (found && turnsSince[found.id] === Infinity) turnsSince[found.id] = count;
     }
-    const candidates = ALL_MODELS.filter(m => m.id !== recentSpeakerIds[0]);
+    // R2: Anti-dyad — detect A->B->A->B pattern in last 4 AI turns
+    const aiModelIds = existingMessages
+      .filter(m => m.speaker !== 'User')
+      .map(m => ALL_MODELS.find(mm => mm.voiceName === m.speaker)?.id)
+      .filter(Boolean) as string[];
+
+    let dyadPartner: string | null = null;
+    if (aiModelIds.length >= 4) {
+      const last4 = aiModelIds.slice(-4);
+      if (last4[0] === last4[2] && last4[1] === last4[3] && last4[0] !== last4[1]) {
+        dyadPartner = last4[1];
+      }
+    }
+
+    const exclude = new Set([recentSpeakerIds[0], dyadPartner].filter(Boolean));
+    let candidates = ALL_MODELS.filter(m => !exclude.has(m.id));
+    if (candidates.length === 0) candidates = ALL_MODELS.filter(m => m.id !== recentSpeakerIds[0]);
+    if (candidates.length === 0) candidates = [...ALL_MODELS];
     const weights = candidates.map(m => Math.pow(turnsSince[m.id] || 1, 2));
     const total = weights.reduce((a, b) => a + b, 0);
     let roll = Math.random() * total;
@@ -117,18 +134,6 @@ export async function POST(req: NextRequest) {
   let extra = '';
   const aiCount = existingMessages.filter(m => m.speaker !== 'User').length;
   if (!conv.indefiniteMode && aiCount >= 3 && aiCount % 5 === 0) extra = '[INVITE_USER] ';
-
-  const aiMsgs = existingMessages.filter(m => m.speaker !== 'User');
-  if (aiMsgs.length >= 5) {
-    const recent = aiMsgs.slice(-5);
-    let pairCount = 0;
-    for (let i = 2; i < recent.length; i++) {
-      if (recent[i].speaker === recent[i - 2].speaker && recent[i].speaker !== recent[i - 1].speaker) {
-        pairCount++;
-      }
-    }
-    if (pairCount >= 2) extra = extra + '[BREAK_LOOP] ';
-  }
 
   const userMsg = `${contextBlock}The last speaker was ${lastMsg?.speaker || 'nobody'}: "${triggerMsg}"\n\n${extra}Respond as ${model.voiceName}.`;
 

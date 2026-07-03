@@ -24,7 +24,7 @@ export default function LandingPage() {
         <div>
           <h3 className="font-semibold mb-1">5 AI Voices</h3>
           <p className="text-sm text-gray-400">
-            Natasha (Grok), Andrew (DeepSeek), Libby (Gemini), Christopher (Claude), William (ChatGPT).
+            Natasha (Grok), Derrick (DeepSeek), Jenny (Gemini), Christopher (Claude), Chad (ChatGPT).
           </p>
         </div>
         <div>
